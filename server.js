@@ -240,6 +240,33 @@ app.delete('/api/bugs/:id', (req, res) => {
     res.json({ ok: true });
 });
 
+// 批量删除Bug
+app.post('/api/bugs/batch-delete', (req, res) => {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || !ids.length) {
+        return res.status(400).json({ error: '请提供要删除的ID列表' });
+    }
+    const placeholders = ids.map(() => '?').join(',');
+    db.run('DELETE FROM bugs WHERE id IN (' + placeholders + ')', ids);
+    saveDb();
+    res.json({ ok: true, deleted: ids.length });
+});
+
+// 批量更新Bug状态
+app.post('/api/bugs/batch-update-status', (req, res) => {
+    const { ids, status } = req.body;
+    if (!Array.isArray(ids) || !ids.length) {
+        return res.status(400).json({ error: '请提供要更新的ID列表' });
+    }
+    if (!['未解决', '解决中', '已解决'].includes(status)) {
+        return res.status(400).json({ error: '无效的状态值' });
+    }
+    const placeholders = ids.map(() => '?').join(',');
+    db.run('UPDATE bugs SET status = ? WHERE id IN (' + placeholders + ')', [status, ...ids]);
+    saveDb();
+    res.json({ ok: true, updated: ids.length });
+});
+
 // 上传文件
 app.post('/api/upload', upload.single('file'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: '请选择文件' });

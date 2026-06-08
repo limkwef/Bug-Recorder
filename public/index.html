@@ -226,6 +226,15 @@
         <div class="toolbar">
             <button class="btn btn-secondary" onclick="switchPage('project-page')">← 返回项目</button>
             <button class="btn btn-primary" onclick="addBug()">＋ 新增Bug</button>
+            <span style="flex:1"></span>
+            <button class="btn btn-danger btn-sm" onclick="batchDelete()" id="btn-batch-del" style="display:none">🗑️ 批量删除</button>
+            <select id="batch-status-select" class="form-select" style="width:auto;display:none" onchange="batchUpdateStatus(this.value)">
+                <option value="">批量改状态...</option>
+                <option value="未解决">未解决</option>
+                <option value="解决中">解决中</option>
+                <option value="已解决">已解决</option>
+            </select>
+            <span id="batch-count" style="font-size:.82rem;color:var(--text-secondary);display:none"></span>
         </div>
         <div class="filter-bar">
             <select id="filter-level" class="form-select" onchange="renderBugList()">
@@ -598,7 +607,10 @@ function renderBugList() {
         return `
         <div class="col-12"><div class="bug-item" onclick="showBugDetail('${b.id}')">
             <div class="title-row">
-                <h6>${safeTitle}</h6>
+                <div style="display:flex;align-items:center;gap:10px;flex:1;">
+                    <input type="checkbox" class="bug-select" value="${b.id}" onclick="event.stopPropagation();updateBatchBar()" style="width:16px;height:16px;cursor:pointer;flex-shrink:0;">
+                    <h6>${safeTitle}</h6>
+                </div>
                 <span class="badge-status" style="background:${statusBg}">${safeStatus}</span>
             </div>
             <div class="meta-row">
@@ -611,6 +623,60 @@ function renderBugList() {
             </div>
         </div></div>`;
     }).join('');
+    updateBatchBar();
+}
+
+// ============ 批量操作 ============
+function getSelectedBugIds() {
+    return Array.from(document.querySelectorAll('.bug-select:checked')).map(cb => cb.value);
+}
+
+function updateBatchBar() {
+    const ids = getSelectedBugIds();
+    const show = ids.length > 0;
+    document.getElementById('btn-batch-del').style.display = show ? '' : 'none';
+    document.getElementById('batch-status-select').style.display = show ? '' : 'none';
+    document.getElementById('batch-count').style.display = show ? '' : 'none';
+    if (show) {
+        document.getElementById('batch-count').textContent = '已选 ' + ids.length + ' 项';
+    }
+    document.getElementById('batch-status-select').value = '';
+}
+
+async function batchDelete() {
+    const ids = getSelectedBugIds();
+    if (!ids.length) return;
+    if (!confirm('确定删除选中的 ' + ids.length + ' 个Bug？')) return;
+    showLoading('批量删除中...');
+    try {
+        await api('/api/bugs/batch-delete', {
+            method: 'POST',
+            body: JSON.stringify({ ids })
+        });
+        bugs = bugs.filter(b => !ids.includes(b.id));
+        renderBugList();
+        renderStats();
+        showToast('✅ 已删除 ' + ids.length + ' 个Bug', 'success');
+    } finally { hideLoading(); }
+}
+
+async function batchUpdateStatus(status) {
+    if (!status) return;
+    const ids = getSelectedBugIds();
+    if (!ids.length) return;
+    showLoading('批量更新状态...');
+    try {
+        await api('/api/bugs/batch-update-status', {
+            method: 'POST',
+            body: JSON.stringify({ ids, status })
+        });
+        for (const b of bugs) {
+            if (ids.includes(b.id)) b.status = status;
+        }
+        renderBugList();
+        renderStats();
+        showToast('✅ 已更新 ' + ids.length + ' 个Bug状态', 'success');
+    } finally { hideLoading(); }
 }
 
 function addBug() {
