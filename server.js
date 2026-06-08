@@ -72,16 +72,6 @@ app.use((req, res, next) => {
     next();
 });
 
-// ============ 鉴权 ============
-const API_TOKEN = process.env.API_TOKEN || crypto.randomBytes(16).toString('hex');
-app.use('/api', (req, res, next) => {
-    const auth = req.headers.authorization;
-    if (!auth || auth !== 'Bearer ' + API_TOKEN) {
-        return res.status(401).json({ error: '未授权，请在请求头中添加 Authorization: Bearer <token>' });
-    }
-    next();
-});
-
 // 文件上传 - multer
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, UPLOAD_DIR),
@@ -316,8 +306,6 @@ async function start() {
         console.log(`   http://localhost:${PORT}`);
         console.log(`   数据文件: ${DB_PATH}`);
         console.log(`   上传目录: ${UPLOAD_DIR}`);
-        console.log(`   API Token: ${API_TOKEN}`);
-        console.log(`   (前端页面可输入此 Token 进行认证)`);
     });
 }
 

@@ -369,37 +369,13 @@ let projects = [];
 let bugs = [];
 
 // ============ API 工具 ============
-function getApiToken() {
-    let token = sessionStorage.getItem('api_token');
-    if (!token) {
-        token = prompt('🔑 请输入 API Token（服务端启动时输出）：');
-        if (!token) throw new Error('需要 Token 才能使用');
-        sessionStorage.setItem('api_token', token);
-    }
-    return token;
-}
-
 async function api(path, options = {}) {
-    const token = getApiToken();
     const config = {
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token,
-        },
-        ...options,
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token,
-            ...(options.headers || {}),
-        },
+        method: options.method || 'GET',
+        headers: { 'Content-Type': 'application/json' },
     };
+    if (options.body) config.body = options.body;
     const res = await fetch(path, config);
-    if (res.status === 401) {
-        sessionStorage.removeItem('api_token');
-        showToast('❌ Token 无效，请重新输入', 'error');
-        getApiToken();
-        return api(path, options);
-    }
     if (!res.ok) {
         const text = await res.text();
         showToast('❌ 请求失败: ' + text, 'error');
@@ -762,11 +738,8 @@ async function uploadSelectedFiles() {
         let fd = new FormData();
         fd.append('file', f);
         try {
-            const result = await fetch('/api/upload', {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + getApiToken() },
-                body: fd
-            }).then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
+            const result = await fetch('/api/upload', { method: 'POST', body: fd })
+                .then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
             existing.push({ name: result.name, url: result.url, size: result.size });
             showToast('✅ 已上传 ' + result.name, 'success');
         } catch (e) {
