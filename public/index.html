@@ -240,6 +240,14 @@
                 <option value="解决中">解决中</option>
                 <option value="已解决">已解决</option>
             </select>
+            <select id="filter-sort" class="form-select" onchange="renderBugList()">
+                <option value="createTime:desc">最新优先</option>
+                <option value="createTime:asc">最早优先</option>
+                <option value="level:desc">严重→轻微</option>
+                <option value="level:asc">轻微→严重</option>
+                <option value="status:asc">未解决→已解决</option>
+                <option value="status:desc">已解决→未解决</option>
+            </select>
             <input type="text" id="search-bug" class="form-control" placeholder="🔍 搜索Bug标题/内容..." oninput="renderBugList()">
         </div>
         <div id="bug-list" class="row g-3"></div>
@@ -397,10 +405,10 @@ async function loadAllData() {
     try {
         const [p, b] = await Promise.all([
             api('/api/projects'),
-            api('/api/bugs')
+            api('/api/bugs?pageSize=9999')
         ]);
         projects = p;
-        bugs = b;
+        bugs = b.data || b;  // 兼容分页格式和旧格式
         renderStats();
         renderProjectList();
     } catch (e) {
@@ -558,12 +566,27 @@ function renderBugList() {
     let level = document.getElementById('filter-level').value;
     let status = document.getElementById('filter-status').value;
     let key = document.getElementById('search-bug').value.toLowerCase();
+    let sort = document.getElementById('filter-sort').value;
+
+    // 有搜索关键词时跨项目搜索，否则只显示当前项目
     let arr = bugs.filter(b =>
-        b.projectId === currentProjectId &&
+        (key || b.projectId === currentProjectId) &&
         (!level || b.level === level) &&
         (!status || b.status === status) &&
         (!key || b.title.toLowerCase().includes(key) || b.content.toLowerCase().includes(key))
     );
+
+    // 排序
+    const [sortField, sortDir] = sort.split(':');
+    const levelOrder = { '严重': 3, '一般': 2, '轻微': 1 };
+    const statusOrder = { '未解决': 0, '解决中': 1, '已解决': 2 };
+    arr.sort((a, b) => {
+        let va, vb;
+        if (sortField === 'level') { va = levelOrder[a.level] || 0; vb = levelOrder[b.level] || 0; }
+        else if (sortField === 'status') { va = statusOrder[a.status] || 0; vb = statusOrder[b.status] || 0; }
+        else { va = a.createTime || ''; vb = b.createTime || ''; }
+        return sortDir === 'asc' ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+    });
 
     document.getElementById('bug-list').innerHTML = arr.map(b => {
         const safeTitle = escapeHtml(b.title);
@@ -785,9 +808,9 @@ async function exportData() {
     try {
         const [p, b] = await Promise.all([
             api('/api/projects'),
-            api('/api/bugs')
+            api('/api/bugs?pageSize=9999')
         ]);
-        let data = { projects: p, bugs: b };
+        let data = { projects: p, bugs: b.data || b };
         let blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         let url = URL.createObjectURL(blob);
         let a = document.createElement('a');

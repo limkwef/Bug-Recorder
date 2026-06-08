@@ -146,24 +146,52 @@ app.delete('/api/projects/:id', (req, res) => {
 
 // ============ API: Bug管理 ============
 
-// 列出Bug（按项目筛选）
+// 列出Bug（支持分页、排序、筛选、跨项目搜索）
 app.get('/api/bugs', (req, res) => {
-    const { projectId } = req.query;
-    let sql = 'SELECT * FROM bugs';
+    let { projectId, search, sort, page, pageSize } = req.query;
     const params = [];
+    const conditions = [];
+
     if (projectId) {
-        sql += ' WHERE projectId = ?';
+        conditions.push('projectId = ?');
         params.push(projectId);
     }
-    sql += ' ORDER BY createTime DESC';
-    const results = db.exec(sql, params);
-    if (!results.length) return res.json([]);
-    const { columns, values } = results[0];
-    res.json(values.map(row => {
-        const obj = Object.fromEntries(columns.map((c, i) => [c, row[i]]));
+    if (search) {
+        conditions.push('(title LIKE ? OR content LIKE ?)');
+        const like = '%' + search + '%';
+        params.push(like, like);
+    }
+
+    const where = conditions.length ? ' WHERE ' + conditions.join(' AND ') : '';
+
+    // 排序
+    let orderBy = 'createTime DESC';
+    if (sort) {
+        const parts = sort.split(':');
+        const field = ['createTime', 'level', 'status', 'title'].includes(parts[0]) ? parts[0] : 'createTime';
+        const dir = parts[1] === 'asc' ? 'ASC' : 'DESC';
+        orderBy = field + ' ' + dir;
+    }
+
+    // 总数
+    const countResult = db.exec('SELECT COUNT(*) as c FROM bugs' + where, params);
+    const total = countResult[0]?.values[0][0] || 0;
+
+    // 分页
+    page = Math.max(1, parseInt(page) || 1);
+    pageSize = Math.min(100, Math.max(1, parseInt(pageSize) || 50));
+    const offset = (page - 1) * pageSize;
+
+    const sql = 'SELECT * FROM bugs' + where + ' ORDER BY ' + orderBy + ' LIMIT ? OFFSET ?';
+    const results = db.exec(sql, [...params, pageSize, offset]);
+
+    const data = results.length ? results[0].values.map(row => {
+        const obj = Object.fromEntries(results[0].columns.map((c, i) => [c, row[i]]));
         obj.files = JSON.parse(obj.files || '[]');
         return obj;
-    }));
+    }) : [];
+
+    res.json({ total, page, pageSize, data });
 });
 
 // 创建Bug
