@@ -4,7 +4,9 @@
   "private": true,
   "description": "个人Bug记录系统 - 轻量后端版",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node test/api.test.js",
+    "test:serve": "API_TOKEN=test-token-12345 node server.js"
   },
   "dependencies": {
     "express": "^4.21.0",
