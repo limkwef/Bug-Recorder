@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐛 个人Bug记录系统（数据永久版）</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f0f2f5;
+            --card-bg: #ffffff;
+            --primary: #4f6ef7;
+            --primary-hover: #3b56d9;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --radius: 12px;
+            --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+            --shadow-hover: 0 10px 25px rgba(0,0,0,.08), 0 4px 10px rgba(0,0,0,.04);
+        }
+        body {
+            background: var(--bg);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            color: var(--text);
+            min-height: 100vh;
+        }
+        .page { display: none; animation: fadeIn .25s ease; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+
+        /* Header */
+        .app-header {
+            background: linear-gradient(135deg, #4f6ef7 0%, #7c3aed 100%);
+            border-radius: 16px;
+            padding: 28px 24px;
+            margin-bottom: 28px;
+            color: white;
+            box-shadow: 0 4px 15px rgba(79,110,247,.3);
+            text-align: center;
+        }
+        .app-header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: .5px;
+        }
+        .app-header p {
+            margin: 6px 0 0;
+            opacity: .8;
+            font-size: .88rem;
+        }
+
+        /* Stats */
+        .stats-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 16px 12px;
+            text-align: center;
+            box-shadow: var(--shadow);
+            transition: all .2s;
+            border: 1px solid rgba(0,0,0,.04);
+        }
+        .stats-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+        .stats-card .num { font-size: 1.5rem; font-weight: 700; line-height: 1.3; }
+        .stats-card .label { font-size: .78rem; color: var(--text-secondary); margin-top: 2px; }
+
+        /* Toolbar */
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .toolbar .btn { border-radius: 8px; font-weight: 600; font-size: .85rem; padding: 6px 16px; transition: all .2s; }
+        .btn-primary { background: var(--primary); border: none; }
+        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79,110,247,.35); }
+        .btn-success { background: #22c55e; border: none; }
+        .btn-success:hover { background: #16a34a; transform: translateY(-1px); }
+        .btn-warning { background: #f59e0b; border: none; color: #fff; }
+        .btn-warning:hover { background: #d97706; color: #fff; transform: translateY(-1px); }
+        .btn-danger { background: #ef4444; border: none; }
+        .btn-danger:hover { background: #dc2626; transform: translateY(-1px); }
+        .btn-info { background: #06b6d4; border: none; color: #fff; }
+        .btn-info:hover { background: #0891b2; color: #fff; transform: translateY(-1px); }
+        .btn-secondary { background: #e2e8f0; border: none; color: var(--text); }
+        .btn-secondary:hover { background: #cbd5e1; color: var(--text); transform: translateY(-1px); }
+        .btn-sm { font-size: .78rem !important; padding: 4px 12px !important; border-radius: 6px !important; }
+
+        /* Cards (Project & Bug) */
+        .project-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 20px;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(0,0,0,.04);
+            transition: all .25s;
+            animation: slideUp .3s ease;
+        }
+        .project-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
+        .project-card h5 { font-weight: 600; font-size: 1.05rem; margin-bottom: 4px; }
+        .project-card .time { font-size: .78rem; color: var(--text-secondary); }
+        .project-card .badge-wrap { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+        .project-card .badge-wrap .badge { font-size: .75rem; font-weight: 500; padding: 4px 10px; border-radius: 6px; }
+
+        .bug-item {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 16px 20px;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(0,0,0,.04);
+            transition: all .2s;
+            animation: slideUp .25s ease;
+        }
+        .bug-item:hover { transform: translateX(4px); box-shadow: var(--shadow-hover); }
+        .bug-item .title-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .bug-item .title-row h6 { font-weight: 600; margin: 0; font-size: .95rem; }
+        .bug-item .meta-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+        .bug-item .action-row { margin-top: 10px; display: flex; gap: 6px; }
+
+        .badge-level { font-size: .75rem; font-weight: 500; padding: 3px 10px; border-radius: 6px; }
+        .badge-status { font-size: .75rem; font-weight: 500; padding: 3px 10px; border-radius: 6px; }
+
+        /* Form */
+        .form-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 28px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(0,0,0,.04);
+        }
+        .form-card h4 { font-weight: 700; margin-bottom: 20px; }
+        .form-label { font-weight: 600; font-size: .85rem; color: var(--text); margin-bottom: 4px; }
+        .form-control, .form-select {
+            border-radius: 8px;
+            border: 1.5px solid #e2e8f0;
+            padding: 8px 12px;
+            font-size: .88rem;
+            transition: all .2s;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79,110,247,.15);
+        }
+        textarea.form-control { resize: vertical; }
+
+        /* Detail */
+        .detail-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 28px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(0,0,0,.04);
+            animation: slideUp .25s ease;
+        }
+        .detail-card h4 { font-weight: 700; margin-bottom: 12px; }
+        .detail-card .info-line { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; font-size: .88rem; }
+        .detail-card hr { margin: 14px 0; border-color: #e2e8f0; }
+        .detail-card .section-label { font-weight: 600; font-size: .85rem; color: var(--text-secondary); margin-bottom: 4px; }
+
+        /* Filter */
+        .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+        .filter-bar .form-select, .filter-bar .form-control { width: auto; min-width: 140px; }
+
+        /* File preview */
+        .file-preview-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 6px 10px; background: #f8fafc; border-radius: 6px; margin-top: 4px;
+            font-size: .82rem;
+        }
+        .file-preview-item a { text-decoration: none; color: var(--primary); }
+        .file-preview-item a:hover { text-decoration: underline; }
+
+        /* Responsive */
+        @media (max-width: 576px) {
+            .app-header h1 { font-size: 1.2rem; }
+            .stats-card .num { font-size: 1.2rem; }
+            .toolbar .btn { font-size: .78rem; padding: 5px 12px; }
+            .filter-bar .form-select, .filter-bar .form-control { min-width: 100%; }
+            .bug-item .title-row { flex-direction: column; align-items: flex-start; }
+        }
+
+        /* Toast */
+        .toast-msg {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            background: #1e293b; color: #fff; padding: 10px 24px;
+            border-radius: 10px; font-size: .88rem; z-index: 9999;
+            box-shadow: 0 8px 30px rgba(0,0,0,.2);
+            animation: fadeIn .3s ease;
+        }
+    </style>
+</head>
+<body class="container py-4">
+    <div class="app-header">
+        <h1>🐛 个人Bug记录系统</h1>
+        <p>数据永久保存在浏览器本地，放心使用</p>
+    </div>
+
+    <!-- 顶部：导出/导入备份按钮 -->
+    <div class="toolbar justify-content-center mb-4">
+        <button class="btn btn-success" onclick="exportData()">💾 导出备份</button>
+        <button class="btn btn-warning" onclick="importData()">📂 导入恢复</button>
+        <button class="btn btn-danger" onclick="clearAllData()">🗑️ 清空数据</button>
+        <button class="btn btn-info" onclick="exportCsvTable()">📊 CSV报表</button>
+    </div>
+
+    <!-- 项目页面 -->
+    <div id="project-page" class="page active">
+        <div class="row g-2 mb-4">
+            <div class="col-3"><div class="stats-card"><div class="num" id="total-project">0</div><div class="label">总项目</div></div></div>
+            <div class="col-3"><div class="stats-card"><div class="num" id="total-bug">0</div><div class="label">总Bug</div></div></div>
+            <div class="col-3"><div class="stats-card"><div class="num" id="unsolve-bug">0</div><div class="label">未解决</div></div></div>
+            <div class="col-3"><div class="stats-card"><div class="num" id="solve-bug">0</div><div class="label">已解决</div></div></div>
+        </div>
+        <button class="btn btn-primary mb-3" onclick="showAddProject()">＋ 创建新项目</button>
+        <div id="project-list" class="row g-3"></div>
+    </div>
+
+    <!-- Bug列表 -->
+    <div id="bug-page" class="page">
+        <div class="toolbar">
+            <button class="btn btn-secondary" onclick="switchPage('project-page')">← 返回项目</button>
+            <button class="btn btn-primary" onclick="addBug()">＋ 新增Bug</button>
+        </div>
+        <div class="filter-bar">
+            <select id="filter-level" class="form-select" onchange="renderBugList()">
+                <option value="">全部严重程度</option>
+                <option value="严重">严重</option>
+                <option value="一般">一般</option>
+                <option value="轻微">轻微</option>
+            </select>
+            <select id="filter-status" class="form-select" onchange="renderBugList()">
+                <option value="">全部状态</option>
+                <option value="未解决">未解决</option>
+                <option value="解决中">解决中</option>
+                <option value="已解决">已解决</option>
+            </select>
+            <input type="text" id="search-bug" class="form-control" placeholder="🔍 搜索Bug标题/内容..." oninput="renderBugList()">
+        </div>
+        <div id="bug-list" class="row g-3"></div>
+    </div>
+
+    <!-- Bug表单 -->
+    <div id="bug-form-page" class="page">
+        <div class="toolbar">
+            <button class="btn btn-secondary" onclick="backBugList()">← 返回Bug列表</button>
+        </div>
+        <div class="form-card">
+            <h4 id="form-title">新增Bug</h4>
+            <form id="bug-form">
+                <input type="hidden" id="bug-id">
+                <div class="mb-3">
+                    <label class="form-label">Bug标题 <span class="text-danger">*</span></label>
+                    <input type="text" id="bug-title" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Bug详细内容 <span class="text-danger">*</span></label>
+                    <textarea id="bug-content" class="form-control" rows="3" required></textarea>
+                </div>
+                <div class="row mb-3">
+                    <div class="col">
+                        <label class="form-label">严重程度 <span class="text-danger">*</span></label>
+                        <select id="bug-level" class="form-select" required>
+                            <option value="严重">严重</option>
+                            <option value="一般">一般</option>
+                            <option value="轻微">轻微</option>
+                        </select>
+                    </div>
+                    <div class="col">
+                        <label class="form-label">解决状态 <span class="text-danger">*</span></label>
+                        <select id="bug-status" class="form-select" required>
+                            <option value="未解决">未解决</option>
+                            <option value="解决中">解决中</option>
+                            <option value="已解决">已解决</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col">
+                        <label class="form-label">解决时间</label>
+                        <input type="datetime-local" id="bug-solve-time" class="form-control">
+                    </div>
+                    <div class="col">
+                        <label class="form-label">解决方法</label>
+                        <textarea id="bug-solve" class="form-control" rows="2" placeholder="描述如何解决的..."></textarea>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">备注</label>
+                    <textarea id="bug-desc" class="form-control" rows="2" placeholder="任何想补充的信息..."></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">附件</label>
+                    <div class="mb-2">
+                        <input type="file" id="bug-file" class="form-control" multiple>
+                        <button class="btn btn-sm btn-primary mt-1" type="button" onclick="uploadSelectedFiles()">📎 上传所选文件</button>
+                        <small class="d-block text-muted mt-1">小文件直接上传（存在浏览器中，建议每张图不超过1MB）</small>
+                    </div>
+                    <div class="input-group">
+                        <input type="url" id="bug-file-link" class="form-control" placeholder="或者粘贴外部链接（大文件推荐）...">
+                        <button class="btn btn-primary" type="button" onclick="addFileFromLink()">添加链接</button>
+                    </div>
+                    <div id="file-preview" class="mt-2"></div>
+                </div>
+                <button type="submit" class="btn btn-primary" style="padding: 10px 32px;">💾 保存Bug</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bug详情 -->
+    <div id="bug-detail-page" class="page">
+        <div class="toolbar">
+            <button class="btn btn-secondary" onclick="switchPage('bug-page')">← 返回Bug列表</button>
+        </div>
+        <div class="detail-card" id="bug-detail"></div>
+    </div>
+
+<script>
+// 全局数据
+let currentProjectId = '';
+let projects = JSON.parse(localStorage.getItem('projects')) || [];
+let bugs = JSON.parse(localStorage.getItem('bugs')) || [];
+
+// 页面切换
+function switchPage(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+}
+
+// 保存数据到浏览器
+function saveData() {
+    localStorage.setItem('projects', JSON.stringify(projects));
+    localStorage.setItem('bugs', JSON.stringify(bugs));
+    renderStats();
+}
+
+// 统计
+function renderStats() {
+    document.getElementById('total-project').textContent = projects.length;
+    document.getElementById('total-bug').textContent = bugs.length;
+    document.getElementById('unsolve-bug').textContent = bugs.filter(b => b.status === '未解决').length;
+    document.getElementById('solve-bug').textContent = bugs.filter(b => b.status === '已解决').length;
+}
+
+// ==================== 项目管理 ====================
+function renderProjectList() {
+    let list = document.getElementById('project-list');
+    list.innerHTML = projects.map((p, index) => {
+        let cnt = bugs.filter(b=>b.projectId===p.id).length;
+        let uns = bugs.filter(b=>b.projectId===p.id&&b.status==='未解决').length;
+        return `
+        <div class="col-md-4 col-sm-6">
+            <div class="project-card" onclick="enterProject('${p.id}')">
+                <h5>${p.name}</h5>
+                <div class="time">📅 ${p.createTime}</div>
+                <div class="badge-wrap">
+                    <span class="badge" style="background:#e0e7ff;color:#4f6ef7;">🐛 ${cnt} 个Bug</span>
+                    ${uns > 0 ? `<span class="badge" style="background:#fee2e2;color:#ef4444;">⚠️ ${uns} 未解决</span>` : `<span class="badge" style="background:#dcfce7;color:#22c55e;">✅ 已全部解决</span>`}
+                </div>
+                <div class="mt-2" style="display:flex;gap:6px;">
+                    <button class="btn btn-sm btn-primary" onclick="editProject(${index},event)">编辑</button>
+                    <button class="btn btn-sm btn-danger" onclick="delProject(${index},event)">删除</button>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function showAddProject() {
+    let name = prompt('项目名称：');
+    if(!name) return;
+    projects.push({id:Date.now().toString(), name, createTime: new Date().toLocaleString()});
+    saveData(); renderProjectList();
+}
+
+function editProject(index,e){e.stopPropagation();let n=prompt('新名称',projects[index].name);if(n){projects[index].name=n;saveData();renderProjectList();}}
+function delProject(index,e){e.stopPropagation();if(!confirm('删除项目会删除所有Bug！确定？'))return;let id=projects[index].id;projects.splice(index,1);bugs=bugs.filter(b=>b.projectId!==id);saveData();renderProjectList();}
+function enterProject(id){currentProjectId=id;switchPage('bug-page');renderBugList();}
+
+// ==================== Bug管理 ====================
+function renderBugList() {
+    let level = document.getElementById('filter-level').value;
+    let status = document.getElementById('filter-status').value;
+    let key = document.getElementById('search-bug').value.toLowerCase();
+    let arr = bugs.filter(b=>b.projectId===currentProjectId&&(!level||b.level===level)&&(!status||b.status===status)&&(!key||b.title.toLowerCase().includes(key)||b.content.toLowerCase().includes(key)));
+    
+    document.getElementById('bug-list').innerHTML = arr.map(b=>`
+        <div class="col-12"><div class="bug-item" onclick="showBugDetail('${b.id}')">
+            <div class="title-row">
+                <h6>${b.title}</h6>
+                <span class="badge-status" style="background:${b.status==='已解决'?'#dcfce7;color:#22c55e':b.status==='解决中'?'#fef3c7;color:#f59e0b':'#fee2e2;color:#ef4444'}">${b.status}</span>
+            </div>
+            <div class="meta-row">
+                <span class="badge-level" style="background:${b.level==='严重'?'#ffedd5;color:#f97316':'#e0e7ff;color:#4f6ef7'}">${b.level}</span>
+                <span style="font-size:.78rem;color:var(--text-secondary)">📅 ${b.createTime||''}</span>
+            </div>
+            <div class="action-row">
+                <button class="btn btn-sm btn-primary" onclick="editBug('${b.id}',event)">编辑</button>
+                <button class="btn btn-sm btn-danger" onclick="delBug('${b.id}',event)">删除</button>
+            </div>
+        </div></div>
+    `).join('');
+}
+
+function addBug(){document.getElementById('bug-form').reset();document.getElementById('bug-id').value='';document.getElementById('form-title').textContent='新增Bug';document.getElementById('file-preview').innerHTML='';document.getElementById('bug-file').value='';document.getElementById('bug-file-link').value='';switchPage('bug-form-page');}
+function editBug(id,e){e.stopPropagation();let b=bugs.find(x=>x.id===id);document.getElementById('bug-id').value=id;document.getElementById('bug-title').value=b.title;document.getElementById('bug-content').value=b.content;document.getElementById('bug-level').value=b.level;document.getElementById('bug-status').value=b.status;document.getElementById('bug-solve-time').value=b.solveTime||'';document.getElementById('bug-solve').value=b.solve||'';document.getElementById('bug-desc').value=b.desc||'';renderFilePreview(b.files);switchPage('bug-form-page');}
+function delBug(id,e){e.stopPropagation();if(!confirm('确定删除？'))return;bugs=bugs.filter(x=>x.id!==id);saveData();renderBugList();}
+
+function showBugDetail(id){
+    let b=bugs.find(x=>x.id===id);
+    let levelColor = b.level==='严重'?'#ffedd5;color:#f97316':'#e0e7ff;color:#4f6ef7';
+    let statusBg = b.status==='已解决'?'#dcfce7;color:#22c55e':b.status==='解决中'?'#fef3c7;color:#f59e0b':'#fee2e2;color:#ef4444';
+    document.getElementById('bug-detail').innerHTML=`
+        <h4>${b.title}</h4>
+        <div class="info-line"><span class="section-label">严重程度</span><span class="badge-level" style="background:${levelColor}">${b.level}</span></div>
+        <div class="info-line"><span class="section-label">当前状态</span><span class="badge-status" style="background:${statusBg}">${b.status}</span></div>
+        <div class="info-line"><span class="section-label">创建时间</span>${b.createTime}</div>
+        <hr>
+        <div class="section-label">Bug内容</div>
+        <p style="white-space:pre-wrap;color:var(--text);font-size:.9rem;">${b.content}</p>
+        ${b.solve ? `<div class="section-label" style="margin-top:12px;">解决方法</div><p style="white-space:pre-wrap;color:var(--text);font-size:.9rem;">${b.solve}</p>` : ''}
+        ${b.desc ? `<div class="section-label" style="margin-top:12px;">备注</div><p style="white-space:pre-wrap;color:var(--text-secondary);font-size:.85rem;">${b.desc}</p>` : ''}
+        ${(b.files||[]).length ? `<div class="section-label" style="margin-top:12px;">附件</div>${b.files.map(f=>`<a href="${f.url}" target="_blank" style="display:block;font-size:.85rem;color:var(--primary);text-decoration:none;padding:4px 0;">📎 ${f.name}</a>`).join('')}` : ''}
+    `;
+    switchPage('bug-detail-page');
+}
+
+// 附件管理（链接 + 上传文件）
+// 上传文件（转base64存入localStorage）
+async function uploadSelectedFiles(){
+    let input = document.getElementById("bug-file");
+    let files = input.files;
+    if(!files || !files.length) { showToast("请先选择文件", "error"); return; }
+    let id = document.getElementById("bug-id").value;
+    let bug = bugs.find(x => x.id === id);
+    let existing = bug?.files || [];
+    for(let f of files){
+        if(f.size > 1024 * 1024){
+            if(!confirm("「" + f.name + "」超过1MB，存在浏览器可能很占空间，确定上传吗？")) continue;
+        }
+        let dataUrl = await fileToDataUrl(f);
+        existing.push({name: f.name, url: dataUrl, size: f.size});
+        showToast("✅ 已上传 " + f.name, "success");
+    }
+    if(bug) { bug.files = existing; saveData(); }
+    renderFilePreview(existing);
+    input.value = "";
+}
+function fileToDataUrl(file){
+    return new Promise((resolve, reject) => {
+        let fr = new FileReader();
+        fr.onload = e => resolve(e.target.result);
+        fr.onerror = reject;
+        fr.readAsDataURL(file);
+    });
+}
+
+// 添加外部链接
+function addFileFromLink(){
+    let input = document.getElementById("bug-file-link");
+    let url = input.value.trim();
+    if(!url) return;
+    if(!url.startsWith("http://") && !url.startsWith("https://")){
+        showToast("请输入有效的网址（以 http:// 或 https:// 开头）", "error");
+        return;
+    }
+    let name = url.split("/").pop() || url;
+    let id = document.getElementById("bug-id").value;
+    let bug = bugs.find(x => x.id === id);
+    let files = bug?.files || [];
+    files.push({name, url, link: true});
+    if(bug) { bug.files = files; saveData(); }
+    renderFilePreview(files);
+    input.value = "";
+    showToast("✅ 已添加附件链接", "success");
+}
+
+// 删除附件
+function delFile(i,e){
+    e.stopPropagation();
+    let id=document.getElementById("bug-id").value;
+    let bug=bugs.find(x=>x.id===id);
+    if(!bug) return;
+    bug.files.splice(i,1);
+    saveData();
+    renderFilePreview(bug.files);
+}
+
+// 预览附件
+function renderFilePreview(files){
+    let div = document.getElementById("file-preview");
+    if(!files || !files.length) { div.innerHTML = ""; return; }
+    div.innerHTML = files.map((f,i)=>{
+        let icon = f.link ? "🔗" : "📎";
+        let sizeStr = f.size ? " (" + (f.size > 1024*1024 ? (f.size/1024/1024).toFixed(1)+"MB" : (f.size/1024).toFixed(0)+"KB") + ")" : "";
+        return '<div class="file-preview-item">' + icon + ' <a href="' + f.url + '" target="_blank">' + f.name + '</a>' + sizeStr + '<button class="btn btn-sm btn-danger" onclick="delFile(' + i + ',event)">删除</button></div>';
+    }).join("");
+}
+
+// 提交表单
+document.getElementById("bug-form").addEventListener("submit",function(e){
+    e.preventDefault();
+    let id=document.getElementById("bug-id").value;
+    let oldFiles=bugs.find(x=>x.id===id)?.files||[];
+    let data={
+        title:document.getElementById("bug-title").value,
+        content:document.getElementById("bug-content").value,
+        level:document.getElementById("bug-level").value,
+        status:document.getElementById("bug-status").value,
+        solveTime:document.getElementById("bug-solve-time").value,
+        solve:document.getElementById("bug-solve").value,
+        desc:document.getElementById("bug-desc").value,
+        files:oldFiles
+    };
+    if(id){let i=bugs.findIndex(x=>x.id===id);bugs[i]={...bugs[i],...data};}
+    else{bugs.push({id:Date.now().toString(),projectId:currentProjectId,createTime:new Date().toLocaleString(),...data});}
+    saveData();backBugList();
+});
+
+function backBugList(){switchPage('bug-page');renderBugList();}
+
+// ==================== 核心：数据备份/恢复（解决清缓存丢失问题） ====================
+// 一键导出所有数据（保存到电脑，永久不丢）
+function exportData() {
+    let data = { projects, bugs };
+    let blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+    let url = URL.createObjectURL(blob);
+    let a = document.createElement('a');
+    a.href = url;
+    a.download = 'Bug记录备份_' + new Date().toLocaleDateString() + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('✅ 备份成功！文件已下载', 'success');
+}
+
+// 一键导入数据（恢复所有项目和Bug）
+function importData() {
+    let input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = e => {
+        let file = e.target.files[0];
+        let fr = new FileReader();
+        fr.onload = ev => {
+            try{
+                let data = JSON.parse(ev.target.result);
+                projects = data.projects || [];
+                bugs = data.bugs || [];
+                saveData();
+                renderProjectList();
+                showToast('✅ 数据恢复成功！', 'success');
+            }catch(err){showToast('❌ 文件格式错误！', 'error');}
+        };
+        fr.readAsText(file);
+    };
+    input.click();
+}
+
+// 清空数据
+function clearAllData(){if(!confirm('⚠️ 确定清空所有数据？请先备份！'))return;projects=[];bugs=[];saveData();renderProjectList();showToast('🗑️ 已清空所有数据');}
+
+// 导出CSV报表
+function exportCsvTable() {
+    if (!bugs.length) { showToast('没有Bug数据可导出', 'error'); return; }
+    // 表头
+    let csv = '﻿项目名称,标题,严重程度,状态,创建时间,解决时间,解决方法,备注,附件链接\n';
+    bugs.forEach(b => {
+        let projectName = projects.find(p => p.id === b.projectId)?.name || '未知项目';
+        let row = [
+            projectName,
+            (b.title || '').replace(/,/g, '，'),
+            b.level || '',
+            b.status || '',
+            b.createTime || '',
+            b.solveTime || '',
+            (b.solve || '').replace(/,/g, '，').replace(/\n/g, ' '),
+            (b.desc || '').replace(/,/g, '，').replace(/\n/g, ' '),
+            (b.files||[]).map(f=>f.name).join('; ').replace(/,/g, '，')
+        ];
+        csv += row.join(',') + '\n';
+    });
+    let blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
+    let url = URL.createObjectURL(blob);
+    let a = document.createElement('a');
+    a.href = url;
+    a.download = 'Bug报表_' + new Date().toLocaleDateString() + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// Toast通知
+function showToast(msg, type) {
+    let div = document.createElement('div');
+    div.className = 'toast-msg';
+    div.textContent = msg;
+    if (type === 'error') div.style.background = '#ef4444';
+    if (type === 'success') div.style.background = '#22c55e';
+    document.body.appendChild(div);
+    setTimeout(() => { div.style.opacity = '0'; div.style.transition = 'opacity .3s'; setTimeout(()=>div.remove(),300); }, 2500);
+}
+
+// 初始化
+window.onload=()=>{renderProjectList();renderStats();}
+</script>
+</body>
+</html>

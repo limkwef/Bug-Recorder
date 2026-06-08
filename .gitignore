@@ -1,0 +1,7 @@
+node_modules/
+uploads/
+data/*.sqlite
+.claude/
+*.bat
+.DS_Store
+Thumbs.db
