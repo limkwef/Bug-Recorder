@@ -316,7 +316,7 @@
                     <div class="mb-2">
                         <input type="file" id="bug-file" class="form-control" multiple>
                         <button class="btn btn-sm btn-primary mt-1" type="button" onclick="uploadSelectedFiles()">📎 上传所选文件</button>
-                        <small class="d-block text-muted mt-1">小文件直接上传（存在浏览器中，建议每张图不超过1MB）</small>
+                        <small class="d-block text-muted mt-1">上传到服务器磁盘，支持多文件同时上传（单文件最大 10MB）</small>
                     </div>
                     <div class="input-group">
                         <input type="url" id="bug-file-link" class="form-control" placeholder="或者粘贴外部链接（大文件推荐）...">
@@ -367,6 +367,7 @@
 let currentProjectId = '';
 let projects = [];
 let bugs = [];
+let currentFormFiles = []; // 当前表单的附件（解决新建Bug时文件挂靠问题）
 
 // ============ API 工具 ============
 async function api(path, options = {}) {
@@ -659,7 +660,8 @@ function addBug() {
     document.getElementById('bug-form').reset();
     document.getElementById('bug-id').value = '';
     document.getElementById('form-title').textContent = '新增Bug';
-    document.getElementById('file-preview').innerHTML = '';
+    currentFormFiles = [];
+    renderFilePreview(currentFormFiles);
     document.getElementById('bug-file').value = '';
     document.getElementById('bug-file-link').value = '';
     switchPage('bug-form-page');
@@ -677,7 +679,8 @@ function editBug(id, e) {
     document.getElementById('bug-solve-time').value = b.solveTime || '';
     document.getElementById('bug-solve').value = b.solve || '';
     document.getElementById('bug-desc').value = b.desc || '';
-    renderFilePreview(b.files);
+    currentFormFiles = [...(b.files || [])];
+    renderFilePreview(currentFormFiles);
     switchPage('bug-form-page');
 }
 
@@ -722,32 +725,38 @@ function showBugDetail(id) {
 
 // ==================== 附件管理 ====================
 
-// 上传文件到服务器
+// 上传文件到服务器（支持多文件批量上传）
 async function uploadSelectedFiles() {
     let input = document.getElementById('bug-file');
     let files = input.files;
     if (!files || !files.length) { showToast('请先选择文件', 'error'); return; }
-    let id = document.getElementById('bug-id').value;
-    let bug = bugs.find(x => x.id === id);
-    let existing = bug?.files || [];
 
+    // 检查是否有超大文件
     for (let f of files) {
         if (f.size > 10 * 1024 * 1024) {
             if (!confirm('「' + f.name + '」超过10MB，确定上传吗？')) continue;
         }
-        let fd = new FormData();
-        fd.append('file', f);
-        try {
-            const result = await fetch('/api/upload', { method: 'POST', body: fd })
-                .then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
-            existing.push({ name: result.name, url: result.url, size: result.size });
-            showToast('✅ 已上传 ' + result.name, 'success');
-        } catch (e) {
-            showToast('❌ 上传 ' + f.name + ' 失败', 'error');
-        }
     }
-    if (bug) { bug.files = existing; }
-    renderFilePreview(existing);
+
+    let fd = new FormData();
+    for (let f of files) {
+        fd.append('files', f);
+    }
+
+    showLoading('上传 ' + files.length + ' 个文件中...');
+    try {
+        const results = await fetch('/api/upload', { method: 'POST', body: fd })
+            .then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
+        for (const result of results) {
+            currentFormFiles.push({ name: result.name, url: result.url, size: result.size });
+        }
+        renderFilePreview(currentFormFiles);
+        showToast('✅ 成功上传 ' + results.length + ' 个文件', 'success');
+    } catch (e) {
+        showToast('❌ 上传失败: ' + e.message, 'error');
+    } finally {
+        hideLoading();
+    }
     input.value = '';
 }
 
@@ -761,12 +770,8 @@ function addFileFromLink() {
         return;
     }
     let name = url.split('/').pop() || url;
-    let id = document.getElementById('bug-id').value;
-    let bug = bugs.find(x => x.id === id);
-    let files = bug?.files || [];
-    files.push({ name, url, link: true });
-    if (bug) { bug.files = files; }
-    renderFilePreview(files);
+    currentFormFiles.push({ name, url, link: true });
+    renderFilePreview(currentFormFiles);
     input.value = '';
     showToast('✅ 已添加附件链接', 'success');
 }
@@ -774,11 +779,8 @@ function addFileFromLink() {
 // 删除附件
 function delFile(i, e) {
     e.stopPropagation();
-    let id = document.getElementById('bug-id').value;
-    let bug = bugs.find(x => x.id === id);
-    if (!bug) return;
-    bug.files.splice(i, 1);
-    renderFilePreview(bug.files);
+    currentFormFiles.splice(i, 1);
+    renderFilePreview(currentFormFiles);
 }
 
 // 预览附件
@@ -796,11 +798,9 @@ function renderFilePreview(files) {
 document.getElementById('bug-form').addEventListener('submit', async function (e) {
     e.preventDefault();
     let id = document.getElementById('bug-id').value;
-    let existingBug = bugs.find(x => x.id === id);
-    let files = existingBug?.files || [];
 
     let data = {
-        projectId: id ? existingBug.projectId : currentProjectId,
+        projectId: id ? bugs.find(x => x.id === id).projectId : currentProjectId,
         title: document.getElementById('bug-title').value,
         content: document.getElementById('bug-content').value,
         level: document.getElementById('bug-level').value,
@@ -808,7 +808,7 @@ document.getElementById('bug-form').addEventListener('submit', async function (e
         solveTime: document.getElementById('bug-solve-time').value,
         solve: document.getElementById('bug-solve').value,
         desc: document.getElementById('bug-desc').value,
-        files: files
+        files: currentFormFiles
     };
 
     showLoading('保存中...');

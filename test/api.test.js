@@ -162,6 +162,24 @@ async function runTests() {
     });
     assert(uploadRes.status === 400, 'Upload returns 400 with no file');
 
+    // Upload with a test file
+    const testFileContent = JSON.stringify({ test: 'hello' });
+    const testFileBlob = new Blob([testFileContent], { type: 'application/json' });
+    const formData = new FormData();
+    formData.append('files', testFileBlob, 'test.json');
+    const uploadFileRes = await fetch(BASE + '/api/upload', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + TEST_TOKEN },
+        body: formData
+    });
+    assert(uploadFileRes.status === 200, 'Upload returns 200 with file');
+    const uploadData = await uploadFileRes.json();
+    assert(Array.isArray(uploadData), 'Upload returns an array');
+    assert(uploadData.length === 1, 'Upload returns correct file count');
+    assert(uploadData[0].name === 'test.json', 'Upload preserves original filename');
+    assert(uploadData[0].url.startsWith('/uploads/'), 'Upload returns URL path');
+    assert(typeof uploadData[0].size === 'number', 'Upload returns file size');
+
     // Cleanup
     console.log('\n── Cleanup ──');
     await api('/api/bugs/' + bugId, { method: 'DELETE' });

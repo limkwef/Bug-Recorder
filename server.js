@@ -257,14 +257,15 @@ app.post('/api/bugs/batch-update-status', (req, res) => {
     res.json({ ok: true, updated: ids.length });
 });
 
-// 上传文件
-app.post('/api/upload', upload.single('file'), (req, res) => {
-    if (!req.file) return res.status(400).json({ error: '请选择文件' });
-    res.json({
-        name: req.file.originalname,
-        url: '/uploads/' + req.file.filename,
-        size: req.file.size
-    });
+// 上传文件（支持多文件）
+app.post('/api/upload', upload.array('files', 10), (req, res) => {
+    if (!req.files || !req.files.length) return res.status(400).json({ error: '请选择文件' });
+    const results = req.files.map(f => ({
+        name: f.originalname,
+        url: '/uploads/' + f.filename,
+        size: f.size
+    }));
+    res.json(results);
 });
 
 // 删除上传的文件
