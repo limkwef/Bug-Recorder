@@ -62,6 +62,16 @@ function saveDb() {
 app.use(express.json());
 app.use('/uploads', express.static(UPLOAD_DIR));
 
+// ============ 请求日志 ============
+app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+        const ms = Date.now() - start;
+        console.log(`${req.method} ${req.originalUrl} ${res.statusCode} ${ms}ms`);
+    });
+    next();
+});
+
 // ============ 鉴权 ============
 const API_TOKEN = process.env.API_TOKEN || crypto.randomBytes(16).toString('hex');
 app.use('/api', (req, res, next) => {
@@ -236,6 +246,12 @@ app.get('/api/stats', (req, res) => {
 
 // ============ 静态文件 ============
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ============ 全局错误处理 ============
+app.use((err, req, res, _next) => {
+    console.error('❌ 服务器错误:', err.message || err);
+    res.status(500).json({ error: '服务器内部错误', detail: err.message || '未知错误' });
+});
 
 // ============ 启动 ============
 async function start() {
