@@ -326,6 +326,16 @@ let currentProjectId = '';
 let projects = JSON.parse(localStorage.getItem('projects')) || [];
 let bugs = JSON.parse(localStorage.getItem('bugs')) || [];
 
+// HTML 转义 - 防止 XSS
+function escapeHtml(str) {
+    if (typeof str !== 'string') return str;
+    return str.replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#039;');
+}
+
 // 页面切换
 function switchPage(id) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -353,11 +363,13 @@ function renderProjectList() {
     list.innerHTML = projects.map((p, index) => {
         let cnt = bugs.filter(b=>b.projectId===p.id).length;
         let uns = bugs.filter(b=>b.projectId===p.id&&b.status==='未解决').length;
+        const safeName = escapeHtml(p.name);
+        const safeTime = escapeHtml(p.createTime);
         return `
         <div class="col-md-4 col-sm-6">
             <div class="project-card" onclick="enterProject('${p.id}')">
-                <h5>${p.name}</h5>
-                <div class="time">📅 ${p.createTime}</div>
+                <h5>${safeName}</h5>
+                <div class="time">📅 ${safeTime}</div>
                 <div class="badge-wrap">
                     <span class="badge" style="background:#e0e7ff;color:#4f6ef7;">🐛 ${cnt} 个Bug</span>
                     ${uns > 0 ? `<span class="badge" style="background:#fee2e2;color:#ef4444;">⚠️ ${uns} 未解决</span>` : `<span class="badge" style="background:#dcfce7;color:#22c55e;">✅ 已全部解决</span>`}
@@ -389,22 +401,29 @@ function renderBugList() {
     let key = document.getElementById('search-bug').value.toLowerCase();
     let arr = bugs.filter(b=>b.projectId===currentProjectId&&(!level||b.level===level)&&(!status||b.status===status)&&(!key||b.title.toLowerCase().includes(key)||b.content.toLowerCase().includes(key)));
     
-    document.getElementById('bug-list').innerHTML = arr.map(b=>`
+    document.getElementById('bug-list').innerHTML = arr.map(b => {
+        const safeTitle = escapeHtml(b.title);
+        const safeStatus = escapeHtml(b.status);
+        const safeLevel = escapeHtml(b.level);
+        const safeTime = escapeHtml(b.createTime || '');
+        const statusBg = b.status === '已解决' ? '#dcfce7;color:#22c55e' : b.status === '解决中' ? '#fef3c7;color:#f59e0b' : '#fee2e2;color:#ef4444';
+        const levelBg = b.level === '严重' ? '#ffedd5;color:#f97316' : '#e0e7ff;color:#4f6ef7';
+        return `
         <div class="col-12"><div class="bug-item" onclick="showBugDetail('${b.id}')">
             <div class="title-row">
-                <h6>${b.title}</h6>
-                <span class="badge-status" style="background:${b.status==='已解决'?'#dcfce7;color:#22c55e':b.status==='解决中'?'#fef3c7;color:#f59e0b':'#fee2e2;color:#ef4444'}">${b.status}</span>
+                <h6>${safeTitle}</h6>
+                <span class="badge-status" style="background:${statusBg}">${safeStatus}</span>
             </div>
             <div class="meta-row">
-                <span class="badge-level" style="background:${b.level==='严重'?'#ffedd5;color:#f97316':'#e0e7ff;color:#4f6ef7'}">${b.level}</span>
-                <span style="font-size:.78rem;color:var(--text-secondary)">📅 ${b.createTime||''}</span>
+                <span class="badge-level" style="background:${levelBg}">${safeLevel}</span>
+                <span style="font-size:.78rem;color:var(--text-secondary)">📅 ${safeTime}</span>
             </div>
             <div class="action-row">
                 <button class="btn btn-sm btn-primary" onclick="editBug('${b.id}',event)">编辑</button>
                 <button class="btn btn-sm btn-danger" onclick="delBug('${b.id}',event)">删除</button>
             </div>
-        </div></div>
-    `).join('');
+        </div></div>`;
+    }).join('');
 }
 
 function addBug(){document.getElementById('bug-form').reset();document.getElementById('bug-id').value='';document.getElementById('form-title').textContent='新增Bug';document.getElementById('file-preview').innerHTML='';document.getElementById('bug-file').value='';document.getElementById('bug-file-link').value='';switchPage('bug-form-page');}
@@ -413,19 +432,26 @@ function delBug(id,e){e.stopPropagation();if(!confirm('确定删除？'))return;
 
 function showBugDetail(id){
     let b=bugs.find(x=>x.id===id);
-    let levelColor = b.level==='严重'?'#ffedd5;color:#f97316':'#e0e7ff;color:#4f6ef7';
-    let statusBg = b.status==='已解决'?'#dcfce7;color:#22c55e':b.status==='解决中'?'#fef3c7;color:#f59e0b':'#fee2e2;color:#ef4444';
-    document.getElementById('bug-detail').innerHTML=`
-        <h4>${b.title}</h4>
-        <div class="info-line"><span class="section-label">严重程度</span><span class="badge-level" style="background:${levelColor}">${b.level}</span></div>
-        <div class="info-line"><span class="section-label">当前状态</span><span class="badge-status" style="background:${statusBg}">${b.status}</span></div>
-        <div class="info-line"><span class="section-label">创建时间</span>${b.createTime}</div>
+    const safeTitle = escapeHtml(b.title);
+    const safeStatus = escapeHtml(b.status);
+    const safeLevel = escapeHtml(b.level);
+    const safeTime = escapeHtml(b.createTime);
+    const safeContent = escapeHtml(b.content);
+    const safeSolve = escapeHtml(b.solve || '');
+    const safeDesc = escapeHtml(b.desc || '');
+    let levelColor = b.level === '严重' ? '#ffedd5;color:#f97316' : '#e0e7ff;color:#4f6ef7';
+    let statusBg = b.status === '已解决' ? '#dcfce7;color:#22c55e' : b.status === '解决中' ? '#fef3c7;color:#f59e0b' : '#fee2e2;color:#ef4444';
+    document.getElementById('bug-detail').innerHTML = `
+        <h4>${safeTitle}</h4>
+        <div class="info-line"><span class="section-label">严重程度</span><span class="badge-level" style="background:${levelColor}">${safeLevel}</span></div>
+        <div class="info-line"><span class="section-label">当前状态</span><span class="badge-status" style="background:${statusBg}">${safeStatus}</span></div>
+        <div class="info-line"><span class="section-label">创建时间</span>${safeTime}</div>
         <hr>
         <div class="section-label">Bug内容</div>
-        <p style="white-space:pre-wrap;color:var(--text);font-size:.9rem;">${b.content}</p>
-        ${b.solve ? `<div class="section-label" style="margin-top:12px;">解决方法</div><p style="white-space:pre-wrap;color:var(--text);font-size:.9rem;">${b.solve}</p>` : ''}
-        ${b.desc ? `<div class="section-label" style="margin-top:12px;">备注</div><p style="white-space:pre-wrap;color:var(--text-secondary);font-size:.85rem;">${b.desc}</p>` : ''}
-        ${(b.files||[]).length ? `<div class="section-label" style="margin-top:12px;">附件</div>${b.files.map(f=>`<a href="${f.url}" target="_blank" style="display:block;font-size:.85rem;color:var(--primary);text-decoration:none;padding:4px 0;">📎 ${f.name}</a>`).join('')}` : ''}
+        <p style="white-space:pre-wrap;color:var(--text);font-size:.9rem;">${safeContent}</p>
+        ${b.solve ? `<div class="section-label" style="margin-top:12px;">解决方法</div><p style="white-space:pre-wrap;color:var(--text);font-size:.9rem;">${safeSolve}</p>` : ''}
+        ${b.desc ? `<div class="section-label" style="margin-top:12px;">备注</div><p style="white-space:pre-wrap;color:var(--text-secondary);font-size:.85rem;">${safeDesc}</p>` : ''}
+        ${(b.files || []).length ? `<div class="section-label" style="margin-top:12px;">附件</div>${b.files.map(f => `<a href="${escapeHtml(f.url)}" target="_blank" style="display:block;font-size:.85rem;color:var(--primary);text-decoration:none;padding:4px 0;">📎 ${escapeHtml(f.name)}</a>`).join('')}` : ''}
     `;
     switchPage('bug-detail-page');
 }
@@ -495,11 +521,11 @@ function delFile(i,e){
 function renderFilePreview(files){
     let div = document.getElementById("file-preview");
     if(!files || !files.length) { div.innerHTML = ""; return; }
-    div.innerHTML = files.map((f,i)=>{
-        let icon = f.link ? "🔗" : "📎";
-        let sizeStr = f.size ? " (" + (f.size > 1024*1024 ? (f.size/1024/1024).toFixed(1)+"MB" : (f.size/1024).toFixed(0)+"KB") + ")" : "";
-        return '<div class="file-preview-item">' + icon + ' <a href="' + f.url + '" target="_blank">' + f.name + '</a>' + sizeStr + '<button class="btn btn-sm btn-danger" onclick="delFile(' + i + ',event)">删除</button></div>';
-    }).join("");
+    div.innerHTML = files.map((f, i) => {
+        let icon = f.link ? '🔗' : '📎';
+        let sizeStr = f.size ? ' (' + (f.size > 1024 * 1024 ? (f.size / 1024 / 1024).toFixed(1) + 'MB' : (f.size / 1024).toFixed(0) + 'KB') + ')' : '';
+        return '<div class="file-preview-item">' + icon + ' <a href="' + escapeHtml(f.url) + '" target="_blank">' + escapeHtml(f.name) + '</a>' + escapeHtml(sizeStr) + '<button class="btn btn-sm btn-danger" onclick="delFile(' + i + ',event)">删除</button></div>';
+    }).join('');
 }
 
 // 提交表单
