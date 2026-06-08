@@ -198,7 +198,7 @@
 <body class="container py-4">
     <div class="app-header">
         <h1>🐛 个人Bug记录系统</h1>
-        <p>🖥️ 服务器模式 — 数据保存在 SQLite，启动 <code>node server.js</code> 即可使用</p>
+        <p>数据永久保存在浏览器本地，放心使用</p>
     </div>
 
     <!-- 顶部：导出/导入备份按钮 -->
@@ -320,58 +320,11 @@
         <div class="detail-card" id="bug-detail"></div>
     </div>
 
-<script>// 全局数据
+<script>
+// 全局数据
 let currentProjectId = '';
-let projects = [];
-let bugs = [];
-
-// ============ API 工具 ============
-async function api(path, options = {}) {
-    const config = {
-        headers: { 'Content-Type': 'application/json' },
-        ...options,
-    };
-    const res = await fetch(path, config);
-    if (!res.ok) {
-        const text = await res.text();
-        showToast('❌ 请求失败: ' + text, 'error');
-        throw new Error(text);
-    }
-    return res.json();
-}
-
-// 加载所有数据
-async function loadAllData() {
-    try {
-        const [p, b] = await Promise.all([
-            api('/api/projects'),
-            api('/api/bugs')
-        ]);
-        projects = p;
-        bugs = b;
-        renderStats();
-        renderProjectList();
-    } catch (e) {
-        console.error('加载数据失败:', e);
-    }
-}
-
-// 统计
-async function renderStats() {
-    try {
-        const stats = await api('/api/stats');
-        document.getElementById('total-project').textContent = stats.totalProjects;
-        document.getElementById('total-bug').textContent = stats.totalBugs;
-        document.getElementById('unsolve-bug').textContent = stats.unsolvedBugs;
-        document.getElementById('solve-bug').textContent = stats.solvedBugs;
-    } catch (e) {
-        // 降级：本地计算
-        document.getElementById('total-project').textContent = projects.length;
-        document.getElementById('total-bug').textContent = bugs.length;
-        document.getElementById('unsolve-bug').textContent = bugs.filter(b => b.status === '未解决').length;
-        document.getElementById('solve-bug').textContent = bugs.filter(b => b.status === '已解决').length;
-    }
-}
+let projects = JSON.parse(localStorage.getItem('projects')) || [];
+let bugs = JSON.parse(localStorage.getItem('bugs')) || [];
 
 // HTML 转义 - 防止 XSS
 function escapeHtml(str) {
@@ -389,12 +342,27 @@ function switchPage(id) {
     document.getElementById(id).classList.add('active');
 }
 
+// 保存数据到浏览器
+function saveData() {
+    localStorage.setItem('projects', JSON.stringify(projects));
+    localStorage.setItem('bugs', JSON.stringify(bugs));
+    renderStats();
+}
+
+// 统计
+function renderStats() {
+    document.getElementById('total-project').textContent = projects.length;
+    document.getElementById('total-bug').textContent = bugs.length;
+    document.getElementById('unsolve-bug').textContent = bugs.filter(b => b.status === '未解决').length;
+    document.getElementById('solve-bug').textContent = bugs.filter(b => b.status === '已解决').length;
+}
+
 // ==================== 项目管理 ====================
 function renderProjectList() {
     let list = document.getElementById('project-list');
     list.innerHTML = projects.map((p, index) => {
-        let cnt = bugs.filter(b => b.projectId === p.id).length;
-        let uns = bugs.filter(b => b.projectId === p.id && b.status === '未解决').length;
+        let cnt = bugs.filter(b=>b.projectId===p.id).length;
+        let uns = bugs.filter(b=>b.projectId===p.id&&b.status==='未解决').length;
         const safeName = escapeHtml(p.name);
         const safeTime = escapeHtml(p.createTime);
         return `
@@ -415,65 +383,24 @@ function renderProjectList() {
     }).join('');
 }
 
-async function showAddProject() {
+function showAddProject() {
     let name = prompt('项目名称：');
-    if (!name) return;
-    try {
-        const result = await api('/api/projects', {
-            method: 'POST',
-            body: JSON.stringify({ name })
-        });
-        projects.push({ id: result.id, name: result.name, createTime: result.createTime });
-        renderProjectList();
-        renderStats();
-    } catch (e) { /* error already shown by api() */ }
+    if(!name) return;
+    projects.push({id:Date.now().toString(), name, createTime: new Date().toLocaleString()});
+    saveData(); renderProjectList();
 }
 
-async function editProject(index, e) {
-    e.stopPropagation();
-    let n = prompt('新名称', projects[index].name);
-    if (!n) return;
-    try {
-        await api('/api/projects/' + projects[index].id, {
-            method: 'PUT',
-            body: JSON.stringify({ name: n })
-        });
-        projects[index].name = n;
-        renderProjectList();
-    } catch (e) { /* error already shown */ }
-}
-
-async function delProject(index, e) {
-    e.stopPropagation();
-    if (!confirm('删除项目会删除所有Bug！确定？')) return;
-    let id = projects[index].id;
-    try {
-        await api('/api/projects/' + id, { method: 'DELETE' });
-        projects.splice(index, 1);
-        bugs = bugs.filter(b => b.projectId !== id);
-        renderProjectList();
-        renderStats();
-    } catch (e) { /* error already shown */ }
-}
-
-function enterProject(id) {
-    currentProjectId = id;
-    switchPage('bug-page');
-    renderBugList();
-}
+function editProject(index,e){e.stopPropagation();let n=prompt('新名称',projects[index].name);if(n){projects[index].name=n;saveData();renderProjectList();}}
+function delProject(index,e){e.stopPropagation();if(!confirm('删除项目会删除所有Bug！确定？'))return;let id=projects[index].id;projects.splice(index,1);bugs=bugs.filter(b=>b.projectId!==id);saveData();renderProjectList();}
+function enterProject(id){currentProjectId=id;switchPage('bug-page');renderBugList();}
 
 // ==================== Bug管理 ====================
 function renderBugList() {
     let level = document.getElementById('filter-level').value;
     let status = document.getElementById('filter-status').value;
     let key = document.getElementById('search-bug').value.toLowerCase();
-    let arr = bugs.filter(b =>
-        b.projectId === currentProjectId &&
-        (!level || b.level === level) &&
-        (!status || b.status === status) &&
-        (!key || b.title.toLowerCase().includes(key) || b.content.toLowerCase().includes(key))
-    );
-
+    let arr = bugs.filter(b=>b.projectId===currentProjectId&&(!level||b.level===level)&&(!status||b.status===status)&&(!key||b.title.toLowerCase().includes(key)||b.content.toLowerCase().includes(key)));
+    
     document.getElementById('bug-list').innerHTML = arr.map(b => {
         const safeTitle = escapeHtml(b.title);
         const safeStatus = escapeHtml(b.status);
@@ -499,46 +426,12 @@ function renderBugList() {
     }).join('');
 }
 
-function addBug() {
-    document.getElementById('bug-form').reset();
-    document.getElementById('bug-id').value = '';
-    document.getElementById('form-title').textContent = '新增Bug';
-    document.getElementById('file-preview').innerHTML = '';
-    document.getElementById('bug-file').value = '';
-    document.getElementById('bug-file-link').value = '';
-    switchPage('bug-form-page');
-}
+function addBug(){document.getElementById('bug-form').reset();document.getElementById('bug-id').value='';document.getElementById('form-title').textContent='新增Bug';document.getElementById('file-preview').innerHTML='';document.getElementById('bug-file').value='';document.getElementById('bug-file-link').value='';switchPage('bug-form-page');}
+function editBug(id,e){e.stopPropagation();let b=bugs.find(x=>x.id===id);document.getElementById('bug-id').value=id;document.getElementById('bug-title').value=b.title;document.getElementById('bug-content').value=b.content;document.getElementById('bug-level').value=b.level;document.getElementById('bug-status').value=b.status;document.getElementById('bug-solve-time').value=b.solveTime||'';document.getElementById('bug-solve').value=b.solve||'';document.getElementById('bug-desc').value=b.desc||'';renderFilePreview(b.files);switchPage('bug-form-page');}
+function delBug(id,e){e.stopPropagation();if(!confirm('确定删除？'))return;bugs=bugs.filter(x=>x.id!==id);saveData();renderBugList();}
 
-function editBug(id, e) {
-    e.stopPropagation();
-    let b = bugs.find(x => x.id === id);
-    if (!b) return;
-    document.getElementById('bug-id').value = id;
-    document.getElementById('bug-title').value = b.title;
-    document.getElementById('bug-content').value = b.content;
-    document.getElementById('bug-level').value = b.level;
-    document.getElementById('bug-status').value = b.status;
-    document.getElementById('bug-solve-time').value = b.solveTime || '';
-    document.getElementById('bug-solve').value = b.solve || '';
-    document.getElementById('bug-desc').value = b.desc || '';
-    renderFilePreview(b.files);
-    switchPage('bug-form-page');
-}
-
-async function delBug(id, e) {
-    e.stopPropagation();
-    if (!confirm('确定删除？')) return;
-    try {
-        await api('/api/bugs/' + id, { method: 'DELETE' });
-        bugs = bugs.filter(x => x.id !== id);
-        renderBugList();
-        renderStats();
-    } catch (e) { /* error already shown */ }
-}
-
-function showBugDetail(id) {
-    let b = bugs.find(x => x.id === id);
-    if (!b) return;
+function showBugDetail(id){
+    let b=bugs.find(x=>x.id===id);
     const safeTitle = escapeHtml(b.title);
     const safeStatus = escapeHtml(b.status);
     const safeLevel = escapeHtml(b.level);
@@ -563,70 +456,71 @@ function showBugDetail(id) {
     switchPage('bug-detail-page');
 }
 
-// ==================== 附件管理 ====================
-
-// 上传文件到服务器
-async function uploadSelectedFiles() {
-    let input = document.getElementById('bug-file');
+// 附件管理（链接 + 上传文件）
+// 上传文件（转base64存入localStorage）
+async function uploadSelectedFiles(){
+    let input = document.getElementById("bug-file");
     let files = input.files;
-    if (!files || !files.length) { showToast('请先选择文件', 'error'); return; }
-    let id = document.getElementById('bug-id').value;
+    if(!files || !files.length) { showToast("请先选择文件", "error"); return; }
+    let id = document.getElementById("bug-id").value;
     let bug = bugs.find(x => x.id === id);
     let existing = bug?.files || [];
-
-    for (let f of files) {
-        if (f.size > 10 * 1024 * 1024) {
-            if (!confirm('「' + f.name + '」超过10MB，确定上传吗？')) continue;
+    for(let f of files){
+        if(f.size > 1024 * 1024){
+            if(!confirm("「" + f.name + "」超过1MB，存在浏览器可能很占空间，确定上传吗？")) continue;
         }
-        let fd = new FormData();
-        fd.append('file', f);
-        try {
-            const result = await fetch('/api/upload', { method: 'POST', body: fd }).then(r => r.json());
-            existing.push({ name: result.name, url: result.url, size: result.size });
-            showToast('✅ 已上传 ' + result.name, 'success');
-        } catch (e) {
-            showToast('❌ 上传 ' + f.name + ' 失败', 'error');
-        }
+        let dataUrl = await fileToDataUrl(f);
+        existing.push({name: f.name, url: dataUrl, size: f.size});
+        showToast("✅ 已上传 " + f.name, "success");
     }
-    if (bug) { bug.files = existing; }
+    if(bug) { bug.files = existing; saveData(); }
     renderFilePreview(existing);
-    input.value = '';
+    input.value = "";
+}
+function fileToDataUrl(file){
+    return new Promise((resolve, reject) => {
+        let fr = new FileReader();
+        fr.onload = e => resolve(e.target.result);
+        fr.onerror = reject;
+        fr.readAsDataURL(file);
+    });
 }
 
 // 添加外部链接
-function addFileFromLink() {
-    let input = document.getElementById('bug-file-link');
+function addFileFromLink(){
+    let input = document.getElementById("bug-file-link");
     let url = input.value.trim();
-    if (!url) return;
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        showToast('请输入有效的网址（以 http:// 或 https:// 开头）', 'error');
+    if(!url) return;
+    if(!url.startsWith("http://") && !url.startsWith("https://")){
+        showToast("请输入有效的网址（以 http:// 或 https:// 开头）", "error");
         return;
     }
-    let name = url.split('/').pop() || url;
-    let id = document.getElementById('bug-id').value;
+    let name = url.split("/").pop() || url;
+    let id = document.getElementById("bug-id").value;
     let bug = bugs.find(x => x.id === id);
     let files = bug?.files || [];
-    files.push({ name, url, link: true });
-    if (bug) { bug.files = files; }
+    files.push({name, url, link: true});
+    if(bug) { bug.files = files; saveData(); }
     renderFilePreview(files);
-    input.value = '';
-    showToast('✅ 已添加附件链接', 'success');
+    input.value = "";
+    showToast("✅ 已添加附件链接", "success");
 }
 
 // 删除附件
-function delFile(i, e) {
+function delFile(i,e){
     e.stopPropagation();
-    let id = document.getElementById('bug-id').value;
-    let bug = bugs.find(x => x.id === id);
-    if (!bug) return;
-    bug.files.splice(i, 1);
+    let id=document.getElementById("bug-id").value;
+    let bug=bugs.find(x=>x.id===id);
+    if(!bug) return;
+    bug.files.splice(i,1);
+    saveData();
     renderFilePreview(bug.files);
 }
 
 // 预览附件
-function renderFilePreview(files) {
-    let div = document.getElementById('file-preview');
-    if (!files || !files.length) { div.innerHTML = ''; return; }
+function renderFilePreview(files){
+    let div = document.getElementById("file-preview");
+    if(!files || !files.length) { div.innerHTML = ""; return; }
     div.innerHTML = files.map((f, i) => {
         let icon = f.link ? '🔗' : '📎';
         let sizeStr = f.size ? ' (' + (f.size > 1024 * 1024 ? (f.size / 1024 / 1024).toFixed(1) + 'MB' : (f.size / 1024).toFixed(0) + 'KB') + ')' : '';
@@ -634,141 +528,73 @@ function renderFilePreview(files) {
     }).join('');
 }
 
-// ==================== 提交表单 ====================
-document.getElementById('bug-form').addEventListener('submit', async function (e) {
+// 提交表单
+document.getElementById("bug-form").addEventListener("submit",function(e){
     e.preventDefault();
-    let id = document.getElementById('bug-id').value;
-    let existingBug = bugs.find(x => x.id === id);
-    let files = existingBug?.files || [];
-
-    let data = {
-        projectId: id ? existingBug.projectId : currentProjectId,
-        title: document.getElementById('bug-title').value,
-        content: document.getElementById('bug-content').value,
-        level: document.getElementById('bug-level').value,
-        status: document.getElementById('bug-status').value,
-        solveTime: document.getElementById('bug-solve-time').value,
-        solve: document.getElementById('bug-solve').value,
-        desc: document.getElementById('bug-desc').value,
-        files: files
+    let id=document.getElementById("bug-id").value;
+    let oldFiles=bugs.find(x=>x.id===id)?.files||[];
+    let data={
+        title:document.getElementById("bug-title").value,
+        content:document.getElementById("bug-content").value,
+        level:document.getElementById("bug-level").value,
+        status:document.getElementById("bug-status").value,
+        solveTime:document.getElementById("bug-solve-time").value,
+        solve:document.getElementById("bug-solve").value,
+        desc:document.getElementById("bug-desc").value,
+        files:oldFiles
     };
-
-    try {
-        if (id) {
-            // 更新
-            await api('/api/bugs/' + id, {
-                method: 'PUT',
-                body: JSON.stringify(data)
-            });
-            let i = bugs.findIndex(x => x.id === id);
-            if (i >= 0) bugs[i] = { ...bugs[i], ...data };
-        } else {
-            // 新增
-            const result = await api('/api/bugs', {
-                method: 'POST',
-                body: JSON.stringify(data)
-            });
-            bugs.push({ id: result.id, createTime: result.createTime, ...data });
-        }
-        renderStats();
-        backBugList();
-    } catch (e) { /* error already shown */ }
+    if(id){let i=bugs.findIndex(x=>x.id===id);bugs[i]={...bugs[i],...data};}
+    else{bugs.push({id:Date.now().toString(),projectId:currentProjectId,createTime:new Date().toLocaleString(),...data});}
+    saveData();backBugList();
 });
 
-function backBugList() {
-    switchPage('bug-page');
-    renderBugList();
+function backBugList(){switchPage('bug-page');renderBugList();}
+
+// ==================== 核心：数据备份/恢复（解决清缓存丢失问题） ====================
+// 一键导出所有数据（保存到电脑，永久不丢）
+function exportData() {
+    let data = { projects, bugs };
+    let blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+    let url = URL.createObjectURL(blob);
+    let a = document.createElement('a');
+    a.href = url;
+    a.download = 'Bug记录备份_' + new Date().toLocaleDateString() + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('✅ 备份成功！文件已下载', 'success');
 }
 
-// ==================== 数据备份/恢复 ====================
-
-// 一键导出所有数据
-async function exportData() {
-    try {
-        const [p, b] = await Promise.all([
-            api('/api/projects'),
-            api('/api/bugs')
-        ]);
-        let data = { projects: p, bugs: b };
-        let blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        let url = URL.createObjectURL(blob);
-        let a = document.createElement('a');
-        a.href = url;
-        a.download = 'Bug记录备份_' + new Date().toLocaleDateString() + '.json';
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast('✅ 备份成功！文件已下载', 'success');
-    } catch (e) { /* error already shown */ }
-}
-
-// 一键导入数据
+// 一键导入数据（恢复所有项目和Bug）
 function importData() {
     let input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
-    input.onchange = async e => {
+    input.onchange = e => {
         let file = e.target.files[0];
         let fr = new FileReader();
-        fr.onload = async ev => {
-            try {
+        fr.onload = ev => {
+            try{
                 let data = JSON.parse(ev.target.result);
-                // 逐个导入项目和Bug
-                for (let p of (data.projects || [])) {
-                    await api('/api/projects', {
-                        method: 'POST',
-                        body: JSON.stringify({ name: p.name })
-                    });
-                }
-                for (let b of (data.bugs || [])) {
-                    await api('/api/bugs', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            projectId: b.projectId,
-                            title: b.title,
-                            content: b.content,
-                            level: b.level,
-                            status: b.status,
-                            solveTime: b.solveTime || '',
-                            solve: b.solve || '',
-                            desc: b.desc || '',
-                            files: b.files || []
-                        })
-                    });
-                }
-                // 重新加载
-                await loadAllData();
+                projects = data.projects || [];
+                bugs = data.bugs || [];
+                saveData();
+                renderProjectList();
                 showToast('✅ 数据恢复成功！', 'success');
-            } catch (err) {
-                showToast('❌ 文件格式错误！' + err.message, 'error');
-            }
+            }catch(err){showToast('❌ 文件格式错误！', 'error');}
         };
         fr.readAsText(file);
     };
     input.click();
 }
 
-// 清空所有数据
-async function clearAllData() {
-    if (!confirm('⚠️ 确定清空所有数据？请先备份！')) return;
-    try {
-        for (let b of bugs) {
-            await api('/api/bugs/' + b.id, { method: 'DELETE' });
-        }
-        for (let p of projects) {
-            await api('/api/projects/' + p.id, { method: 'DELETE' });
-        }
-        projects = [];
-        bugs = [];
-        renderProjectList();
-        renderStats();
-        showToast('🗑️ 已清空所有数据');
-    } catch (e) { /* error already shown */ }
-}
+// 清空数据
+function clearAllData(){if(!confirm('⚠️ 确定清空所有数据？请先备份！'))return;projects=[];bugs=[];saveData();renderProjectList();showToast('🗑️ 已清空所有数据');}
 
-// 导出CSV
+// 导出CSV报表
 function exportCsvTable() {
     if (!bugs.length) { showToast('没有Bug数据可导出', 'error'); return; }
-    let csv = '﻿项目名称,标题,严重程度,状态,创建时间,解决时间,解决方法,备注,附件\n';
+    // 表头
+    let csv = '﻿项目名称,标题,严重程度,状态,创建时间,解决时间,解决方法,备注,附件链接\n';
     bugs.forEach(b => {
         let projectName = projects.find(p => p.id === b.projectId)?.name || '未知项目';
         let row = [
@@ -780,11 +606,11 @@ function exportCsvTable() {
             b.solveTime || '',
             (b.solve || '').replace(/,/g, '，').replace(/\n/g, ' '),
             (b.desc || '').replace(/,/g, '，').replace(/\n/g, ' '),
-            (b.files || []).map(f => f.name).join('; ').replace(/,/g, '，')
+            (b.files||[]).map(f=>f.name).join('; ').replace(/,/g, '，')
         ];
         csv += row.join(',') + '\n';
     });
-    let blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    let blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
     let url = URL.createObjectURL(blob);
     let a = document.createElement('a');
     a.href = url;
@@ -795,19 +621,17 @@ function exportCsvTable() {
 
 // Toast通知
 function showToast(msg, type) {
-    // 移除旧的toast
-    document.querySelectorAll('.toast-msg').forEach(el => el.remove());
     let div = document.createElement('div');
     div.className = 'toast-msg';
     div.textContent = msg;
     if (type === 'error') div.style.background = '#ef4444';
     if (type === 'success') div.style.background = '#22c55e';
     document.body.appendChild(div);
-    setTimeout(() => { div.style.opacity = '0'; div.style.transition = 'opacity .3s'; setTimeout(() => div.remove(), 300); }, 2500);
+    setTimeout(() => { div.style.opacity = '0'; div.style.transition = 'opacity .3s'; setTimeout(()=>div.remove(),300); }, 2500);
 }
 
 // 初始化
-window.onload = () => { loadAllData(); };
+window.onload=()=>{renderProjectList();renderStats();}
 </script>
 </body>
 </html>
