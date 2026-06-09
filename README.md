@@ -18,6 +18,9 @@ bug-record/
 
 ## 🚀 快速开始
 
+### 入口页
+直接双击打开 `bug.html`，选择模式进入。
+
 ### 方式一：服务器模式（推荐）
 
 需要 Node.js 18+。
@@ -35,9 +38,12 @@ npm start
 
 ### 方式二：单机模式
 
-直接打开 `public/standalone.html`，无需服务器。
+- 从 `bug.html` 入口页点击「单机模式」
+- 或直接打开 `public/standalone.html`
 
-> ⚠️ 数据保存在浏览器 localStorage，清除缓存会丢失数据，请定期导出备份。
+无需服务器，数据保存在浏览器 localStorage。
+
+> ⚠️ 清除浏览器缓存会导致数据丢失，请定期导出备份。
 
 ## ✨ 功能
 
