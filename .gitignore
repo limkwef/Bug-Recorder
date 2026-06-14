@@ -6,3 +6,4 @@ data/*.sqlite
 *.bat
 .DS_Store
 Thumbs.db
+server.log
